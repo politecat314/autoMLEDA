@@ -37,6 +37,18 @@ def upload_file():
         except:
             return "There was an issue adding dataset to db"
 
+@app.route('/eda', methods = ['GET', 'POST'])
+def eda():
+    if request.method == 'POST':
+        columns=request.form.getlist('columns')
+        label=request.form['label']
+
+        # draw and save the graphs
+
+        return render_template("eda.html", 
+                                columns=request.form.getlist('columns'),
+                                label=request.form['label'])
+
 @app.route('/display_data')
 def display_data():
     # get dataset from db

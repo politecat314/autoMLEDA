@@ -80,7 +80,7 @@
 
         <div class="row">
             <h3>Select columns to use for EDA</h3>
-            <form action="/eda" method="post">
+            <form action="/eda" method="post" enctype="multipart/form-data">
             <table class="table table-hover">
                 <thead>
                     <tr class="table-secondary">
@@ -103,15 +103,15 @@
                             {% endfor %}
                             <td>
                                 <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="{{row[1]}}" id="flexCheckDefault">
+                                <input class="form-check-input" name="columns" type="checkbox" value="{{row[1]}}" id="flexCheckDefault" checked>
                                 <label class="form-check-label" for="flexCheckDefault">
                                 </label>
                               </div>
                             </td>
                             <td>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="flexRadioDefault" id="flexRadio_{{row[1]}}">
-                                    <label class="form-check-label" for="flexRadio_{{row[1]}}">
+                                    <input class="form-check-input" value="{{row[1]}}" type="radio" name="label" id="label_{{row[1]}}" checked>
+                                    <label class="form-check-label" for="label_{{row[1]}}">
                                       
                                     </label>
                                 </div>
