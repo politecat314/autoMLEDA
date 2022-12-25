@@ -43,11 +43,36 @@ def eda():
         columns=request.form.getlist('columns')
         label=request.form['label']
 
+        # prevent label from appearing twice
+        if label in columns:
+            columns.remove(label)
+
+        # get dataset from db
+        current_dataset = Dataset.query.order_by(Dataset.id.desc()).first()
+
+        # reading from pandas
+        df = pd.read_csv(current_dataset.filename)
+
+
+        # filter out columns
+        df = df[columns + [label]]
+        describe = df.describe().applymap('{:,.2f}'.format)
+        operation = list(describe.index)
+        describe.insert(loc=0, column='', value=operation)
+
         # draw and save the graphs
 
         return render_template("eda.html", 
                                 columns=request.form.getlist('columns'),
-                                label=request.form['label'])
+                                label=request.form['label'],
+
+                                # df.describe
+                                column_names=describe.columns.values, 
+                                row_data=list(describe.values.tolist()), 
+                                zip=zip,
+                                link_column=''
+                                
+                                )
 
 @app.route('/display_data')
 def display_data():
@@ -75,7 +100,6 @@ def display_data():
                             # metadata_df
                             metadata_column_names=metadata_df.columns.values, 
                             metadata_row_data=list(metadata_df.values.tolist()), 
-                            
                             )
 
 if __name__ == '__main__':
