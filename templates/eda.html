@@ -81,7 +81,84 @@
         <hr>
         <div class="row">
             <h3>Correlation heatmap</h3>
+            <img src="{{correlation_plot}}" alt="Correlation heatmap">
         </div>
+        <hr>
+        <div class="row">
+            <h3>Distribution plots</h3>
+            {% for plot in distplots %}
+
+
+            <div class="col col-4">
+                <img src="{{plot}}" alt="{{plot}}">
+            </div>
+
+
+            {% endfor %}
+        </div>
+        <hr>
+
+
+        <div class="row">
+            <h3>Select features for model training</h3>
+            <form action="/train" method="post" enctype="multipart/form-data">
+                <div class="row">
+                    <div class="col col-9">
+                        <!-- select features for automl -->
+                        <table class="table table-hover">
+                            <thead>
+                                <tr class="table-secondary">
+                                    {% for col in df_feature_column_names %}
+                                    <th scope="col">{{col}}</th>
+                                    {% endfor %}
+                                    <th scope="col">Use feature for training</th>
+                                </tr>
+                            </thead>
+
+
+                            <tbody>
+                                {% for row in df_feature_row_data %}
+                                <tr>
+                                    {% for col, row_ in zip(df_feature_column_names, row) %}
+
+                                    <td>{{row_}}</td>
+
+                                    {% endfor %}
+                                    <td>
+                                        <div class="form-check">
+                                            <input class="form-check-input" name="columns" type="checkbox"
+                                                value="{{row[0]}}" id="flexCheckDefault" checked>
+                                            <label class="form-check-label" for="flexCheckDefault">
+                                            </label>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+
+                <div class="row">
+                    <!-- training time -->
+                    <div class="col col-9">
+                        <div class="input-group">
+                            <span class="input-group-text">Total time to search for model (s)</span>
+                            <input type="text" aria-label="First name" class="form-control" name="time_left_for_this_task">
+                            <span class="input-group-text">Per run time limit (s)</span>
+                            <input type="text" aria-label="Last name" class="form-control" name="per_run_time_limit">
+                        </div>
+                    </div>
+
+                    <div class="col col-3">
+                        <input class="btn btn-primary" type="submit" value="Train model">
+                    </div>
+                </div>
+
+            </form>
+        </div>
+        <br>
     </div>
 
 

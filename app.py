@@ -3,11 +3,19 @@ from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
 import io
+import eda_draw
+import os
 
 app = Flask(__name__)
 app.secret_key = "super secret key"
+
+# database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db'
 db = SQLAlchemy(app)
+
+# eda plots save folder
+EDA_FOLDER = os.path.join('static', 'eda')
+app.config['UPLOAD_FOLDER'] = EDA_FOLDER
 
 class Dataset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -60,7 +68,25 @@ def eda():
         operation = list(describe.index)
         describe.insert(loc=0, column='', value=operation)
 
+        # df to use for feature selection
+        # df_feature = df_feature[columns]
+        feature_dict = {"Features":columns}
+        df_feature = pd.DataFrame.from_dict(feature_dict)
+
+
+        # clear eda folder first
+        for file in os.listdir('static/eda'):
+            os.remove('static/eda/'+file)
+
         # draw and save the graphs
+        eda_draw.draw_all(df)
+
+        # distplot filenames
+        distplots = [i for i in os.listdir('static/eda') if 'distplot' in i]
+        temp = []
+        for plot in distplots: # add full filepath
+            temp.append(os.path.join(app.config['UPLOAD_FOLDER'], plot))
+        distplots = temp
 
         return render_template("eda.html", 
                                 columns=request.form.getlist('columns'),
@@ -70,9 +96,31 @@ def eda():
                                 column_names=describe.columns.values, 
                                 row_data=list(describe.values.tolist()), 
                                 zip=zip,
-                                link_column=''
+                                link_column='',
                                 
+                                correlation_plot=os.path.join(app.config['UPLOAD_FOLDER'], 'correlation.png'),
+
+                                distplots = distplots,
+
+                                # metadata_df
+                                df_feature_column_names=df_feature.columns.values, 
+                                df_feature_row_data=list(df_feature.values.tolist()), 
+
                                 )
+
+@app.route('/train', methods = ['GET', 'POST'])
+def train():
+    if request.method == 'POST':
+        columns=request.form.getlist('columns')
+        time_left_for_this_task=request.form['time_left_for_this_task']
+        per_run_time_limit=request.form['per_run_time_limit']
+
+        return render_template('train.html',
+                                columns=columns,
+                                time_left_for_this_task=time_left_for_this_task,
+                                per_run_time_limit=per_run_time_limit
+        )
+
 
 @app.route('/display_data')
 def display_data():
