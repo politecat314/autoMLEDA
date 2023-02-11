@@ -1,0 +1,1 @@
+{"dataset_filename": "datasets/diabetes.csv", "label": "Outcome", "features": ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"], "classes": null, "binary_classification": true}

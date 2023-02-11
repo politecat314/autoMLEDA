@@ -23,17 +23,11 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
-                    <li class="nav-item active">
-                        <a class="nav-link" href="#">Home <span class="sr-only">(current)</span></a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">Features</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#">Pricing</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link disabled" href="#">Disabled</a>
+                        <a class="nav-link" href="/documentation">Documentation</a>
                     </li>
                 </ul>
             </div>
@@ -80,10 +74,19 @@
 
         <hr>
         <div class="row">
+            <h3>Label frequency</h3>
+            <div class="col">
+                <img src="static/eda/label_frequency.png" alt="Label frequency">
+            </div>
+        </div>
+        
+        <hr>
+        <div class="row">
             <h3>Correlation heatmap</h3>
             <img src="{{correlation_plot}}" alt="Correlation heatmap">
         </div>
         <hr>
+        
         <div class="row">
             <h3>Distribution plots</h3>
             {% for plot in distplots %}
@@ -145,7 +148,7 @@
                     <div class="col col-9">
                         <div class="input-group">
                             <span class="input-group-text">Total time to search for model (s)</span>
-                            <input type="number" aria-label="First name" class="form-control" name="time_left_for_this_task" value="120" required>
+                            <input type="number" aria-label="First name" class="form-control" name="time_left_for_this_task" value="300" required>
                             <span class="input-group-text">Per run time limit (s)</span>
                             <input type="number" aria-label="Last name" class="form-control" name="per_run_time_limit" value="30" required>
                         </div>
@@ -153,12 +156,22 @@
                     <div class="col col-3">
                         <div class="input-group">
                             <span class="input-group-text">Folds for cv</span>
-                            <input type="number" aria-label="First name" class="form-control" name="cv_folds" value="5" required>
+                            <input type="number" aria-label="First name" class="form-control" name="cv_folds" value="10" required>
                         </div>
                     </div>
 
                     <br>
                     
+                </div>
+                <br>
+                <div class="row">
+                    
+                    <div class="col col-3">
+                        <div class="input-group">
+                            <span class="input-group-text">Test set size (%)</span>
+                            <input type="number" aria-label="First name" class="form-control" name="test_set_size" value="30" required>
+                        </div>
+                    </div>
                 </div>
 
                 <br>

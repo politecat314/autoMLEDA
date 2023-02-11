@@ -1,10 +1,16 @@
-from flask import Flask, render_template, request, session, url_for, redirect
+from flask import Flask, render_template, request, session, url_for, redirect, jsonify
 from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
 import io
 import eda_draw
 import os
+import time
+import requests
+import json
+from celery import Celery
+import asynchronous
+import numpy as np
 
 app = Flask(__name__)
 app.secret_key = "super secret key"
@@ -17,15 +23,79 @@ db = SQLAlchemy(app)
 EDA_FOLDER = os.path.join('static', 'eda')
 app.config['UPLOAD_FOLDER'] = EDA_FOLDER
 
+
 class Dataset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(200), nullable=False)
     classification = db.Column(db.Integer, default=0)
 
+
+
+# write json
+def write_json(dictionary, filename='instance/database.json'):
+    with open(filename, "w") as outfile:
+        json.dump(dictionary, outfile)
+    
+    print("successfully wrote", dictionary, "to", filename)
+
+# read json
+def read_json(filename='instance/database.json'):
+    with open(filename, 'r') as openfile:
+        dictionary = json.load(openfile)
+    
+    return dictionary
+
+# update json
+def update_json(key, value, filename='instance/database.json'):
+    dictionary = read_json(filename)
+    dictionary[key] = value
+    write_json(dictionary, filename)
+    print("successfully updated dictionary")
+
+
+# get the value of something in json
+def get_json(key, filename='instance/database.json'):
+    dictionary = read_json(filename)
+    return dictionary[key]
+
+
 @app.route('/')  
 def main():  
-    return render_template("index.html")  
-	
+    return render_template("index.html")
+
+
+
+@app.route('/results_csv', methods=['GET']) # call linux to create results.csv files
+def create_results_csv():
+    r = requests.get(url = 'http://localhost:5000/results_csv')
+
+    return jsonify( r.json() )
+    
+
+
+
+@app.route('/download_models', methods=['POST'])
+def download_models():
+    if request.method == 'POST':
+        downloaded = []
+
+        for model_name in request.files.keys():
+            model = request.files[model_name]
+            model.save('downloads/'+model.filename)
+            downloaded.append[model_name]
+            print(model_name, "saved")
+
+        return jsonify({'downloaded':downloaded})
+
+
+@app.route('/full_trained_models')
+def full_trained_models():
+    """request linux server to send fully trained models"""
+    r = requests.get('http://127.0.0.1:5000/upload_models')
+    
+    return 'response from training server: ' + str(r.text)
+
+
 @app.route('/upload', methods = ['GET', 'POST'])
 def upload_file():
     save_dir = 'datasets/'
@@ -36,14 +106,21 @@ def upload_file():
         filename = save_dir + f.filename
         f.save(filename)
 
+        # asynchronous task
+        asynchronous.upload_to_training_server.delay(filename)
+
         # add dataset to db
-        new_dataset = Dataset(filename=filename)
-        try:
-            db.session.add(new_dataset)
-            db.session.commit()
-            return redirect(url_for('.display_data'))
-        except:
-            return "There was an issue adding dataset to db"
+        database = {}
+        database['dataset_filename'] = filename
+        write_json(database)
+        return redirect(url_for('.display_data'))
+
+        # try:
+        #     db.session.add(new_dataset)
+        #     db.session.commit()
+        #     return redirect(url_for('.display_data'))
+        # except:
+        #     return "There was an issue adding dataset to db"
 
 @app.route('/eda', methods = ['GET', 'POST'])
 def eda():
@@ -51,16 +128,33 @@ def eda():
         columns=request.form.getlist('columns')
         label=request.form['label']
 
+        # add label to db
+        update_json('label',label)
+
         # prevent label from appearing twice
         if label in columns:
             columns.remove(label)
 
+        # save columns into json file
+        update_json("features", columns)
+
         # get dataset from db
-        current_dataset = Dataset.query.order_by(Dataset.id.desc()).first()
+        # current_dataset = Dataset.query.order_by(Dataset.id.desc()).first()
+        current_dataset = read_json()
+        dataset_filename = current_dataset['dataset_filename']
 
         # reading from pandas
-        df = pd.read_csv(current_dataset.filename)
+        df = pd.read_csv(dataset_filename)
 
+        # unique classes for label
+        classes = list(df[label].unique()).sort()
+        update_json('classes',classes)
+
+        binary_classification = False
+        if df[label].nunique() == 2:
+            binary_classification = True
+        
+        update_json('binary_classification',binary_classification)
 
         # filter out columns
         df = df[columns + [label]]
@@ -79,7 +173,7 @@ def eda():
             os.remove('static/eda/'+file)
 
         # draw and save the graphs
-        eda_draw.draw_all(df)
+        eda_draw.draw_all(df, label)
 
         # distplot filenames
         distplots = [i for i in os.listdir('static/eda') if 'distplot' in i]
@@ -108,27 +202,122 @@ def eda():
 
                                 )
 
+@app.route('/permutation', methods=['GET'])
+def permutation():
+    r = requests.get(url = 'http://127.0.0.1:5000/permutation')
+
+    permutations = r.json()
+    
+    json_file = read_json()
+    features = json_file['features']
+
+    for key in permutations:
+        value_list, label_list = eda_draw.get_sorted_permutation(permutations[key], features)
+        eda_draw.draw_permutation_importance(value_list, label_list, f"{key}.png")
+
+    print('\n')
+    print("permutation importance", permutations)
+    
+    return jsonify(permutations)
+
+
+@app.route('/predictions', methods=['GET'])
+def draw_predictions():
+    r = requests.get(url = 'http://127.0.0.1:5000/predictions')
+    predictions_dict = r.json()
+
+    binary_classification = get_json('binary_classification')
+    dataframes_list = eda_draw.generate_insights(predictions_dict, binary_classification, get_json('classes'))
+
+    return jsonify({'dataframes_list':dataframes_list,'binary_classification':binary_classification})
+
+
+
 @app.route('/train', methods = ['GET', 'POST'])
 def train():
     if request.method == 'POST':
         columns=request.form.getlist('columns')
         time_left_for_this_task=request.form['time_left_for_this_task']
         per_run_time_limit=request.form['per_run_time_limit']
+        test_set_size = request.form['test_set_size']
+        cv = request.form['cv_folds']
+
+        # sending post to the training server
+        payload = {}
+
+        # get dataset from db
+        # dataset_filename = Dataset.query.order_by(Dataset.id.desc()).first().filename.split('/')[-1]
+        current_dataset = read_json()
+        dataset_filename = current_dataset['dataset_filename'].split('/')[-1]
+        payload['dataset_filename'] = dataset_filename
+
+        payload['columns'] = columns
+        payload['time_left_for_this_task'] = time_left_for_this_task
+        payload['per_run_time_limit'] = per_run_time_limit
+        payload['test_set_size'] = test_set_size
+
+        # label = Dataset.query.order_by(Dataset.id.desc()).first().label
+        current_dataset = read_json()
+        label = current_dataset['label']
+        
+
 
         return render_template('train.html',
-                                columns=columns,
+                                columns=json.dumps(columns),
                                 time_left_for_this_task=time_left_for_this_task,
-                                per_run_time_limit=per_run_time_limit
+                                per_run_time_limit=per_run_time_limit,
+                                dataset_filename=dataset_filename,
+                                label=label,
+                                test_set_size=test_set_size,
+                                cv=cv,
+                                # train_job=train_job
+                                payload=payload
         )
 
+@app.route('/documentation')
+def documentation():
+    return render_template('documentation.html')
+
+@app.route('/train_model', methods=['GET'])
+def train_model():
+    if request.method == 'GET':
+        print(request.args)
+
+        columns=request.args['columns']
+        time_left_for_this_task=request.args['time_left_for_this_task']
+        per_run_time_limit=request.args['per_run_time_limit']
+        test_set_size = request.args['test_set_size']
+
+        payload = {}
+
+        # get dataset from db
+        # dataset_filename = Dataset.query.order_by(Dataset.id.desc()).first().filename.split('/')[-1]
+        current_dataset = read_json()
+        dataset_filename = current_dataset['dataset_filename'].split('/')[-1]
+
+        payload['dataset_filename'] = dataset_filename
+        payload['test_set_size'] = test_set_size
+        payload['columns'] = columns
+        payload['time_left_for_this_task'] = time_left_for_this_task
+        payload['per_run_time_limit'] = per_run_time_limit
+
+        # return payload
+        
+        print("payload from windows", payload)
+        res = requests.post('http://127.0.0.1:5000/train_model', params=request.args)
+        return jsonify(res.text)
 
 @app.route('/display_data')
 def display_data():
     # get dataset from db
-    current_dataset = Dataset.query.order_by(Dataset.id.desc()).first()
+    # current_dataset = Dataset.query.order_by(Dataset.id.desc()).first()
+    current_dataset = read_json()
+    dataset_filename = current_dataset['dataset_filename']
 
     # reading from pandas
-    df = pd.read_csv(current_dataset.filename)
+    # df = pd.read_csv(current_dataset.filename)
+    df = pd.read_csv(dataset_filename)
+    
 
     # metadata df
     buf = io.StringIO()
@@ -143,7 +332,8 @@ def display_data():
                             column_names=df.columns.values, 
                             row_data=list(df.values.tolist()), 
                             zip=zip,
-                            filename=current_dataset.filename.split('/')[-1],
+                            # filename=current_dataset.filename.split('/')[-1],
+                            filename=dataset_filename.split('/')[-1],
                             
                             # metadata_df
                             metadata_column_names=metadata_df.columns.values, 
@@ -151,4 +341,4 @@ def display_data():
                             )
 
 if __name__ == '__main__':
-    app.run(debug = True)
+    app.run(debug = True, port=3000)
